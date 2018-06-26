@@ -11,14 +11,14 @@ app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 
 app.get('/calculate', function(request, response) {
-	calculateRate(request, response);
+	handle(request, response);
 });
 
 app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
 
-function handleMath(request, response) {
+function handle(request, response) {
 	var requestUrl = url.parse(request.url, true);
 
 	console.log("Query parameters: " + JSON.stringify(requestUrl.query));
@@ -28,10 +28,10 @@ function handleMath(request, response) {
 	var type = requestUrl.query.type;
 	var weight = Number(requestUrl.query.weight);
 
-	computeOperation(response, type, weight);
+	calculateRate(response, type, weight);
 }
 
-function computeOperation(response, type, actual_weight) {
+function calculateRate(response, type, actual_weight) {
 	type = type.toLowerCase();
 	weight = Math.ceil(actual_weight);
 
