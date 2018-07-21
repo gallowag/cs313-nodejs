@@ -1,80 +1,215 @@
-var express = require('express');
+const express = require('express');
 var app = express();
-var url = require('url');
 
-app.set('port', (process.env.PORT || 5000));
+//Following the "Single query" approach from: https://node-postgres.com/features/pooling#single-query
 
-app.use(express.static(__dirname + '/public'));
+const { Pool } = require("pg"); // This is the postgres database connection module.
 
-// views is directory for all template files
-app.set('views', __dirname + '/views');
-app.set('view engine', 'ejs');
+// This says to use the connection string from the environment variable, if it is there,
+// otherwise, it will use a connection string that refers to a local postgres DB
+const connectionString = process.env.DATABASE_URL || "postgres://ta_user:ta_pass@localhost:5432/familyhistory";
 
-app.get('/calculate', function(request, response) {
-	handle(request, response);
-});
+// Establish a new connection to the data source specified the connection string.
+const pool = new Pool({connectionString: connectionString});
 
-app.listen(app.get('port'), function() {
-  console.log('Node app is running on port', app.get('port'));
-});
+app.set("port", (process.env.PORT || 5000))
+	.use(express.static(__dirname + "/public"))
+	.use(express.json())
+	.use(express.urlencoded({extended:true}))
+	.get("/getEvents", getEvents)
+	.get("/getVolunteer", getVolunteer)
+	.get("/getStyles", getStyles)
+	.get("/getCat", getCat)
+	.listen(app.get("port"), function(){
+		console.log("listening on Port:" + app.get("port"));
+	});
 
-function handle(request, response) {
-	var requestUrl = url.parse(request.url, true);
+function getVolunteers(req, res) {
+	// First get the person's id
+	var id = req.query.id;
 
-	console.log("Query parameters: " + JSON.stringify(requestUrl.query));
+	//if(isNaN(id) || id <= 0) {
 
-	// TODO: Here we should check to make sure we have all the correct parameters
+		getVolunteersFromDb(id, function(error, result) {
+			// This is the callback function that will be called when the DB is done.
+			// The job here is just to send it back.
 
-	var type = requestUrl.query.type;
-	var weight = Number(requestUrl.query.weight);
-
-	calculateRate(response, type, weight);
+			// Make sure we got a row with the person, then prepare JSON to send back
+			if (error || result == null) {
+				res.status(500).json({success: false, data: error});
+			} else {
+				res.status(200).json(result);
+			}
+		});
+	//} 
 }
 
-function calculateRate(response, type, actual_weight) {
-	type = type.toLowerCase();
-	weight = Math.ceil(actual_weight);
+function getEvents(req, res) {
+	// First get the person's id
+	var id = req.query.id;
 
-	var result = 0;
+	//if(isNaN(id) || id <= 0) {
 
-	if (type == "stamped") {
-		if (weight > 3) {
-			result =  1.13;
-		} else {
-			result = ((weight - 1) * .21) + .50;
+		getEventsFromDb(id, function(error, result) {
+			// This is the callback function that will be called when the DB is done.
+			// The job here is just to send it back.
+
+			// Make sure we got a row with the person, then prepare JSON to send back
+			if (error || result == null) {
+				res.status(500).json({success: false, data: error});
+			} else {
+				res.status(200).json(result);
+			}
+		});
+	//} 
+}
+
+function getVolunteer(req, res) {
+	// First get the person's id
+	var id = req.query.id;
+
+	//if(isNaN(id) || id <= 0) {
+
+		getVolunteerFromDb(id, function(error, result) {
+			// This is the callback function that will be called when the DB is done.
+			// The job here is just to send it back.
+
+			// Make sure we got a row with the person, then prepare JSON to send back
+			if (error || result == null || result.length != 1) {
+				res.status(500).json({success: false, data: error});
+			} else {
+				res.status(200).json(result[0]);
+			}
+		});
+	//} 
+}
+
+function getStyles(req, res) {
+	// First get the person's id
+	var id = req.query.id;
+
+	//if(isNaN(id) || id <= 0) {
+
+		getStylesFromDb(id, function(error, result) {
+			// This is the callback function that will be called when the DB is done.
+			// The job here is just to send it back.
+
+			// Make sure we got a row with the person, then prepare JSON to send back
+			if (error || result == null) {
+				res.status(500).json({success: false, data: error});
+			} else {
+				res.status(200).json(result);
+			}
+		});
+	//} 
+}
+
+function getCat(req, res) {
+	// First get the person's id
+	var id = req.query.id;
+
+	//if(isNaN(id) || id <= 0) {
+
+		getCatFromDb(id, function(error, result) {
+			// This is the callback function that will be called when the DB is done.
+			// The job here is just to send it back.
+
+			// Make sure we got a row with the person, then prepare JSON to send back
+			if (error || result == null || result.length != 1) {
+				res.status(500).json({success: false, data: error});
+			} else {
+				res.status(200).json(result[0]);
+			}
+		});
+	//}
+}
+
+
+//*******************************Get stuff from database*********************************//
+function getVolunteersFromDb(id, callback) {
+	console.log("Getting events from DB with id: " + id);
+
+	var sql = "SELECT v.name, v.active, v.preferences, p.is_manager FROM volunteer_position AS vp, volunteer AS v, position AS p WHERE p.category_id = $1::int AND vp.volunteer_id = v.id AND vp.position_id = p.id";
+	var params = [id];
+
+	pool.query(sql, params, function(err, result) {
+		if (err) {
+			console.log("Error in query: ")
+			console.log(err);
+			callback(err, null);
 		}
-	} else if (type == "metered") {
-		if (weight > 3) {
-			result =  1.10;
-		} else {
-			result = ((weight - 1) * .21) + .47;
-		}		
-	} else if (type == "flat") {
-		if (weight > 12) {
-			result =  3.52;
-		} else {
-			result = ((weight - 1) * .21) + 1.00;
-		}		
-	} else if (type == "retail") {
-		if (weight > 12) {
-			result = 5.50;
-		} else if (weight < 5) {
-			result =  3.50;
-		} else if (weight < 9) {
-			result = 3.75;
-		} else {
-			result = ((weight - 8) * .35) + 3.75;
-		}
-	} else {
-		// It would be best here to redirect to an "unknown operation"
-		// error page or something similar.
-	}
-
-	// Set up a JSON object of the values we want to pass along to the EJS result page
-	var params = {type: type, weight: actual_weight, result: result};
-
-	// Render the response, using the EJS page "result.ejs" in the pages directory
-	// Makes sure to pass it the parameters we need.
-	response.render('pages/result', params);
+		console.log(result);
+		callback(null, result.rows);
+	});
 
 }
+
+function getEventsFromDb(id, callback) {
+	console.log("Getting events from DB with id: " + id);
+
+	var sql = "SELECT e.id, e.category_id, e.start, e.finish, t.name FROM event AS e, event_type AS t WHERE e.category_id = $1::int AND e.type_id = t.id";
+	var params = [id];
+	
+	pool.query(sql, params, function(err, result) {
+		if (err) {
+			console.log("Error in query: ")
+			console.log(err);
+			callback(err, null);
+		}
+		console.log(result);
+		callback(null, result.rows);
+	});
+
+} 
+
+function getVolunteerFromDb(id, callback) {
+	console.log("Getting volunteer from DB with id: " + id);
+
+	var sql = "SELECT id, name, active, username, password FROM volunteer WHERE id = $1::int";
+	var params = [id];
+
+	pool.query(sql, params, function(err, result) {
+		if (err) {
+			console.log("Error in query: ")
+			console.log(err);
+			callback(err, null);
+		}
+		callback(null, result.rows);
+	});
+
+} 
+
+function getStylesFromDb(id, callback) {
+	console.log("Getting styles from DB with id: " + id);
+
+	var sql = "SELECT id, category_id, name FROM style WHERE category_id = $1::int";
+	var params = [id];
+
+	pool.query(sql, params, function(err, result) {
+		if (err) {
+			console.log("Error in query: ")
+			console.log(err);
+			callback(err, null);
+		}
+
+		callback(null, result.rows);
+	});
+
+} 
+
+function getCatFromDb(id, callback) {
+
+	var sql = "SELECT id, name, description FROM category WHERE id = $1::int";
+	var params = [id];
+
+	pool.query(sql, params, function(err, result) {
+		if (err) {
+			console.log("Error in query: ")
+			console.log(err);
+			callback(err, null);
+		}
+
+		callback(null, result.rows);
+	});
+
+} 
